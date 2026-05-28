@@ -19,8 +19,8 @@ export default defineConfig({
         orientation: 'portrait-primary',
         start_url: '/',
         icons: [
-          { src: '/icons/ORBIT.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icons/ORBIT.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+          { src: '/icons/orbit.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icons/orbit.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
         ],
       },
       workbox: {
