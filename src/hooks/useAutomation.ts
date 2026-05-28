@@ -1,23 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { onSnapshot, collection, query, where } from 'firebase/firestore';
 import { db } from '@/firebase/config';
+import { setRelayState, setRelayTimer, setRelayAutomation } from '@/firebase/realtimeDb';
+import { useDeviceStore } from '@/store/deviceStore';
 import { Automation } from '@/types';
-import { setChannelState } from '@/firebase/realtimeDb';
-import { useState } from 'react';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-const channelIndexFromKey = (key: string): number => {
-  const match = key.match(/ch(\d+)/);
-  return match ? parseInt(match[1], 10) - 1 : 0;
-};
-
-const parseHHMM = (hhmm: string): { h: number; m: number } => {
-  const [h, m] = hhmm.split(':').map(Number);
-  return { h, m };
-};
-
-// ─── useAutomations ──────────────────────────────────────────────────────────
+// ─── useAutomations (Firestore fallback) ──────────────────────────────────────
 
 export const useAutomations = (ownerUid: string | undefined) => {
   const [automations, setAutomations] = useState<Automation[]>([]);
@@ -36,83 +24,71 @@ export const useAutomations = (ownerUid: string | undefined) => {
   return { automations, loading };
 };
 
-// ─── useScheduleRunner ───────────────────────────────────────────────────────
+// ─── useScheduleRunner (Flat Schema Watchdog) ───────────────────────────────
 
 /**
- * Client-side schedule runner.
- *
- * Checks all enabled automations every 60 seconds (on the minute).
- * When a schedule fires:
- *   1. Writes `channels/chN/state` to RTDB via setChannelState
- *   2. setChannelState also sets the pendingBits wake bit (no FCM needed)
- *
- * Note: this only runs while the app is open in the browser.
+ * Watchdog runner for simplified flat schema timers and automations.
+ * Runs client-side every 10 seconds:
+ *   1. Countdown Timer: Turns the relay OFF and disables timer when current time matches auto_off and timer is 1.
+ *   2. Scheduled Automation: Turns the relay ON at auto_on, and OFF at auto_off.
  */
-export const useScheduleRunner = (automations: Automation[]) => {
-  const firedRef = useRef<Record<string, number>>({}); // automationId → last fired minute
+export const useScheduleRunner = (automations: any) => {
+  const { rtdbData } = useDeviceStore();
+  const lastProcessedMinuteRef = useRef<string>('');
 
   useEffect(() => {
     const check = async () => {
-      const now  = new Date();
-      const day  = now.getDay();              // 0=Sun…6=Sat
-      const h    = now.getHours();
-      const m    = now.getMinutes();
-      const minuteKey = h * 60 + m;
+      const now = new Date();
+      const currentHHMM = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
-      for (const auto of automations) {
-        if (!auto.enabled) continue;
+      const deviceIds = Object.keys(rtdbData);
+      for (const deviceId of deviceIds) {
+        const data = rtdbData[deviceId];
+        if (!data) continue;
 
-        // ── Countdown timer ──────────────────────────────────────────────
-        if (auto.type === 'countdown' && auto.duration) {
-          // Countdown is purely device-side (firmware handles it via timer field).
-          // No client-side action needed.
-          continue;
+        const {
+          auto, timer, auto_on, auto_off, auto_channel,
+          ch1, ch2,
+        } = data;
+
+        const relayIndex = auto_channel || 1;
+        const currentRelayState = relayIndex === 1 ? (ch1 === 1) : (ch2 === 1);
+
+        // Avoid double processing in the same minute
+        const currentMinuteKey = `${deviceId}_${currentHHMM}`;
+
+        // ── 1. Countdown Timer check ─────────────────────────────────────
+        if (timer === 1 && auto_off && currentRelayState) {
+          if (currentHHMM === auto_off && lastProcessedMinuteRef.current !== currentMinuteKey + '_timer') {
+            console.log(`[Watchdog] Timer expired (auto_off matches) for device ${deviceId} relay ${relayIndex}. Turning OFF.`);
+            await setRelayTimer(deviceId, relayIndex, 0, false).catch(console.error);
+            lastProcessedMinuteRef.current = currentMinuteKey + '_timer';
+          }
         }
 
-        // ── Schedule / Weekly ────────────────────────────────────────────
-        if ((auto.type === 'schedule' || auto.type === 'weekly') && auto.onTime && auto.offTime) {
-          const { h: onH, m: onM }  = parseHHMM(auto.onTime);
-          const { h: offH, m: offM } = parseHHMM(auto.offTime);
-          const onMinute  = onH  * 60 + onM;
-          const offMinute = offH * 60 + offM;
-
-          // For weekly, check day-of-week
-          const dayMatch = auto.type === 'weekly'
-            ? (auto.days ?? []).includes(day)
-            : true;
-
-          if (!dayMatch) continue;
-
-          const fireKey = `${auto.id}`;
-
-          // Fire ON
-          if (minuteKey === onMinute && firedRef.current[fireKey + '_on'] !== onMinute) {
-            firedRef.current[fireKey + '_on'] = onMinute;
-            const chIndex = channelIndexFromKey(auto.channelKey);
-            await setChannelState(auto.deviceId, auto.channelKey, true, chIndex).catch(console.error);
-          }
-
-          // Fire OFF
-          if (minuteKey === offMinute && firedRef.current[fireKey + '_off'] !== offMinute) {
-            firedRef.current[fireKey + '_off'] = offMinute;
-            const chIndex = channelIndexFromKey(auto.channelKey);
-            await setChannelState(auto.deviceId, auto.channelKey, false, chIndex).catch(console.error);
+        // ── 2. Scheduled Automation check ─────────────────────────────────────
+        if (auto === 1 && auto_on && auto_off) {
+          if (lastProcessedMinuteRef.current !== currentMinuteKey + '_auto') {
+            // Trigger ON
+            if (currentHHMM === auto_on && !currentRelayState) {
+              console.log(`[Watchdog] Automation ON triggered for device ${deviceId} relay ${relayIndex}`);
+              await setRelayState(deviceId, relayIndex as any, true).catch(console.error);
+              lastProcessedMinuteRef.current = currentMinuteKey + '_auto';
+            }
+            // Trigger OFF
+            if (currentHHMM === auto_off && currentRelayState) {
+              console.log(`[Watchdog] Automation OFF triggered for device ${deviceId} relay ${relayIndex}`);
+              await setRelayAutomation(deviceId, relayIndex, auto_on, auto_off, false).catch(console.error);
+              lastProcessedMinuteRef.current = currentMinuteKey + '_auto';
+            }
           }
         }
       }
     };
 
-    // Align to the next whole minute, then tick every 60 s
-    const msToNextMinute = (60 - new Date().getSeconds()) * 1000;
-    let intervalId: ReturnType<typeof setInterval>;
-    const timeoutId = setTimeout(() => {
-      check(); // fire immediately on the minute
-      intervalId = setInterval(check, 60_000);
-    }, msToNextMinute);
+    const interval = setInterval(check, 10000); // Check every 10 seconds
+    check(); // Run immediately
 
-    return () => {
-      clearTimeout(timeoutId);
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [automations]);
+    return () => clearInterval(interval);
+  }, [rtdbData]);
 };

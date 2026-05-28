@@ -5,13 +5,12 @@ import {
   update,
   onValue,
   off,
-  runTransaction,
   DataSnapshot,
 } from 'firebase/database';
 import { rtdb } from './config';
-import { Channel, ChannelKey, DeviceInfo, DeviceRTDB } from '@/types';
+import { DeviceInfo, DeviceRTDB } from '@/types';
 
-// ─── Device Info ──────────────────────────────────────────────────────────────
+// ─── Device Fetching ──────────────────────────────────────────────────────────
 
 export const getDeviceRTDB = async (deviceId: string): Promise<DeviceRTDB | null> => {
   const snap = await get(ref(rtdb, `deviceData/${deviceId}`));
@@ -19,143 +18,94 @@ export const getDeviceRTDB = async (deviceId: string): Promise<DeviceRTDB | null
 };
 
 export const getDeviceInfo = async (deviceId: string): Promise<DeviceInfo | null> => {
-  const snap = await get(ref(rtdb, `deviceData/${deviceId}/info`));
-  return snap.exists() ? (snap.val() as DeviceInfo) : null;
+  const snap = await get(ref(rtdb, `deviceData/${deviceId}`));
+  if (!snap.exists()) return null;
+  const val = snap.val();
+  return {
+    relayCount: val.relay_count || 2,
+    firmwareVersion: val.firmwareVersion || '1.0.0',
+    deviceType: 'relay',
+    ownerId: val.owner_id || '',
+    password: val.device_password || '',
+  };
 };
 
 export const claimDevice = async (deviceId: string, ownerId: string) => {
-  await update(ref(rtdb, `deviceData/${deviceId}/info`), { ownerId });
+  await update(ref(rtdb, `deviceData/${deviceId}`), { owner_id: ownerId });
 };
 
 export const releaseDevice = async (deviceId: string) => {
-  await update(ref(rtdb, `deviceData/${deviceId}/info`), { ownerId: '' });
+  await update(ref(rtdb, `deviceData/${deviceId}`), { owner_id: '' });
 };
 
-export const initDeviceRTDB = async (deviceId: string, info: DeviceInfo) => {
-  await set(ref(rtdb, `deviceData/${deviceId}/info`), info);
+export const initDeviceRTDB = async (deviceId: string, data: any) => {
+  await set(ref(rtdb, `deviceData/${deviceId}`), data);
 };
 
-// ─── Channels (one-shot fetch) ────────────────────────────────────────────────
+// ─── Realtime Subscriptions ──────────────────────────────────────────────────
 
-/**
- * One-shot read of all channels for a device.
- * Called only when pendingBits signals there is something to read.
- */
-export const fetchChannels = async (
-  deviceId: string
-): Promise<Record<ChannelKey, Channel> | null> => {
-  const snap = await get(ref(rtdb, `deviceData/${deviceId}/channels`));
-  return snap.exists() ? (snap.val() as Record<ChannelKey, Channel>) : null;
-};
-
-export const updateChannel = async (deviceId: string, chKey: ChannelKey, data: Partial<Channel>) => {
-  await update(ref(rtdb, `deviceData/${deviceId}/channels/${chKey}`), data);
-};
-
-export const renameChannel = async (deviceId: string, chKey: ChannelKey, name: string) => {
-  await set(ref(rtdb, `deviceData/${deviceId}/channels/${chKey}/name`), name);
-};
-
-// ─── Channel State + Bit Flag ─────────────────────────────────────────────────
-
-/**
- * Toggle a relay AND set its wake bit in pendingBits atomically.
- * chIndex: 0-based index (ch1 → 0, ch2 → 1, …)
- */
-export const setChannelState = async (
+export const subscribeToDevice = (
   deviceId: string,
-  chKey: ChannelKey,
-  state: boolean,
-  chIndex: number
-) => {
-  // Write relay state
-  await set(ref(rtdb, `deviceData/${deviceId}/channels/${chKey}/state`), state);
-  // Set the wake bit (OR with existing bits via transaction)
-  await runTransaction(ref(rtdb, `deviceData/${deviceId}/pendingBits`), (current) => {
-    const bits = typeof current === 'number' ? current : 0;
-    return bits | (1 << chIndex);
-  });
-};
-
-// ─── PendingBits ──────────────────────────────────────────────────────────────
-
-/**
- * Subscribe to the pendingBits integer only.
- * When bits !== 0, the caller should do a one-shot fetchChannels() and then
- * clear the bits it has processed.
- */
-export const subscribeToPendingBits = (
-  deviceId: string,
-  callback: (bits: number) => void
+  callback: (data: DeviceRTDB | null) => void
 ): (() => void) => {
-  const r = ref(rtdb, `deviceData/${deviceId}/pendingBits`);
+  const r = ref(rtdb, `deviceData/${deviceId}`);
   onValue(r, (snap: DataSnapshot) => {
-    callback(snap.exists() ? (snap.val() as number) : 0);
+    callback(snap.exists() ? (snap.val() as DeviceRTDB) : null);
   });
   return () => off(r);
 };
 
-/**
- * Clear specific bits (called after the app has processed them).
- * Uses a transaction to avoid races with the ESP8266.
- */
-export const clearPendingBits = async (deviceId: string, mask: number) => {
-  await runTransaction(ref(rtdb, `deviceData/${deviceId}/pendingBits`), (current) => {
-    const bits = typeof current === 'number' ? current : 0;
-    return bits & ~mask;
-  });
+// ─── Direct Relay State Controls ─────────────────────────────────────────────
+
+export const setRelayState = async (deviceId: string, relayIndex: 1 | 2, state: boolean) => {
+  const chKey = `ch${relayIndex}`;
+  await set(ref(rtdb, `deviceData/${deviceId}/${chKey}`), state ? 1 : 0);
 };
 
-// ─── Heartbeat ────────────────────────────────────────────────────────────────
+// ─── Timer Controls ──────────────────────────────────────────────────────────
 
-export const subscribeToHeartbeat = (
+export const setRelayTimer = async (
   deviceId: string,
-  callback: (heartbeat: number | null) => void
-): (() => void) => {
-  const r = ref(rtdb, `deviceData/${deviceId}/heartbeat`);
-  onValue(r, (snap: DataSnapshot) => {
-    callback(snap.exists() ? (snap.val() as number) : null);
-  });
-  return () => off(r);
-};
-
-// ─── Timer ────────────────────────────────────────────────────────────────────
-
-export const setChannelTimer = async (
-  deviceId: string,
-  chKey: ChannelKey,
-  duration: number,
-  enabled: boolean,
-  chIndex: number
+  relayIndex: number,
+  durationMinutes: number,
+  enabled: boolean
 ) => {
-  await update(ref(rtdb, `deviceData/${deviceId}/channels/${chKey}/timer`), {
-    enabled,
-    duration,
-    startTime: enabled ? Date.now() : 0,
-  });
-  // Wake the device to pick up the timer change
+  const chKey = `ch${relayIndex}`;
+  const updates: any = {
+    auto_channel: relayIndex,
+    timer: enabled ? 1 : 0,
+  };
+
   if (enabled) {
-    await runTransaction(ref(rtdb, `deviceData/${deviceId}/pendingBits`), (current) => {
-      const bits = typeof current === 'number' ? current : 0;
-      return bits | (1 << chIndex);
-    });
+    // 1. Turn relay ON immediately
+    updates[chKey] = 1;
+    // 2. Add duration minutes to current time to calculate auto_off
+    const targetDate = new Date(Date.now() + durationMinutes * 60 * 1000);
+    updates.auto_off = `${targetDate.getHours().toString().padStart(2, '0')}:${targetDate.getMinutes().toString().padStart(2, '0')}`;
+  } else {
+    updates[chKey] = 0;
+    updates.auto_off = '';
   }
+
+  await update(ref(rtdb, `deviceData/${deviceId}`), updates);
 };
 
-// ─── Schedule ─────────────────────────────────────────────────────────────────
+// ─── Automation Controls ─────────────────────────────────────────────────────
 
-export const setChannelSchedule = async (
+export const setRelayAutomation = async (
   deviceId: string,
-  chKey: ChannelKey,
-  schedule: { enabled: boolean; onTime: string; offTime: string; days: number[] },
-  chIndex: number
+  relayIndex: number,
+  autoOn: string,
+  autoOff: string,
+  enabled: boolean
 ) => {
-  await update(ref(rtdb, `deviceData/${deviceId}/channels/${chKey}/schedule`), schedule);
-  // Wake the device to reload schedule config
-  if (schedule.enabled) {
-    await runTransaction(ref(rtdb, `deviceData/${deviceId}/pendingBits`), (current) => {
-      const bits = typeof current === 'number' ? current : 0;
-      return bits | (1 << chIndex);
-    });
-  }
+  const updates: any = {
+    auto_channel: relayIndex,
+    auto_on: enabled ? autoOn : '',
+    auto_off: enabled ? autoOff : '',
+    auto: enabled ? 1 : 0,
+    timer: 0, // disable timer when daily automation is set
+  };
+
+  await update(ref(rtdb, `deviceData/${deviceId}`), updates);
 };

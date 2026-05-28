@@ -73,9 +73,18 @@ export interface DeviceInfo {
 }
 
 export interface DeviceRTDB {
-  info: DeviceInfo;
-  channels: Record<ChannelKey, Channel>;
-  heartbeat: number;  // epoch ms
+  device_id: string;
+  device_password?: string;
+  relay_count: number;
+  heartbeat: number;
+  ch1?: number; // 0 or 1
+  ch2?: number; // 0 or 1
+  auto: number; // 0 or 1 (automation active flag)
+  timer: number; // 0 or 1 (timer active flag)
+  auto_on: string; // "HH:mm"
+  auto_off: string; // "HH:mm"
+  auto_channel?: number; // 1 or 2
+  owner_id?: string;
   status: 'online' | 'offline';
 }
 

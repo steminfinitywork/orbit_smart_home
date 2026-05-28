@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useDeviceStore } from '@/store/deviceStore';
 import { useUIStore } from '@/store/uiStore';
 
-const HEARTBEAT_THRESHOLD_MS = 45000; // 15s heartbeat × 3 = 45s threshold
+const HEARTBEAT_THRESHOLD_MS = 25000; // 25s threshold (device beats every 15s)
 
 export const useHeartbeat = () => {
   const { devices, rtdbData, updateDevice } = useDeviceStore();

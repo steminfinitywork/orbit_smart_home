@@ -19,7 +19,6 @@ const navItems = [
   { label: 'Dashboard',  icon: <Dashboard />,    path: '/dashboard' },
   { label: 'Rooms',      icon: <MeetingRoom />,  path: '/rooms' },
   { label: 'Automation', icon: <ElectricBolt />, path: '/automation' },
-  { label: 'Add Device', icon: <AddCircle />,    path: '/pair' },
   { label: 'Profile',    icon: <Person />,       path: '/profile' },
 ];
 
@@ -42,37 +41,7 @@ const Sidebar: React.FC<Props> = ({ open, onClose }) => {
 
       {/* ── Logo ── */}
       <Box sx={{ px: 2.5, py: 2.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-        {/* Orbit animated logo */}
-        <Box sx={{ position: 'relative', width: 44, height: 44, flexShrink: 0 }}>
-          {/* Orbit rings */}
-          {[44, 34, 24].map((size, i) => (
-            <motion.div
-              key={size}
-              style={{
-                position: 'absolute',
-                width: size,
-                height: size * 0.42,
-                borderRadius: '50%',
-                border: `1px solid ${i === 0 ? 'rgba(0,212,255,0.5)' : i === 1 ? 'rgba(74,144,255,0.4)' : 'rgba(0,212,255,0.6)'}`,
-                top: '50%', left: '50%',
-                marginTop: -(size * 0.42) / 2,
-                marginLeft: -size / 2,
-              }}
-              animate={{ rotateZ: 360 }}
-              transition={{ duration: 4 + i * 2, repeat: Infinity, ease: 'linear' }}
-            />
-          ))}
-          {/* House icon */}
-          <Box sx={{
-            position: 'absolute', top: '50%', left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: 18, height: 18,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <img src="/icons/orbit_alone.png" alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
-          </Box>
-        </Box>
-
+        <img src="/icons/orbit_alone.png" alt="Orbit Logo" style={{ width: 34, height: 34, objectFit: 'contain', display: 'block' }} />
         <Box>
           <Typography
             variant="subtitle1"

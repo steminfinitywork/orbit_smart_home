@@ -11,6 +11,8 @@ interface UIState {
   clearNotifications: () => void;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
+  editMode: boolean;
+  setEditMode: (active: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -31,6 +33,8 @@ export const useUIStore = create<UIState>()(
       clearNotifications: () => set({ notifications: [] }),
       sidebarOpen: false,
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+      editMode: false,
+      setEditMode: (editMode) => set({ editMode }),
     }),
     {
       name: 'ui-storage',

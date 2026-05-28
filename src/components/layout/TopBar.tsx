@@ -2,15 +2,16 @@ import React, { useState } from 'react';
 import {
   AppBar, Toolbar, IconButton, Typography, Badge, Box,
   Popover, List, ListItem, ListItemText, ListItemIcon,
-  Divider, Button, useTheme, Avatar,
+  Divider, Button, useTheme, Avatar, Menu, MenuItem,
 } from '@mui/material';
 import {
   Menu as MenuIcon, Notifications, NotificationsNone,
-  CheckCircle, Error, Warning, Info, ClearAll,
+  CheckCircle, Error, Warning, Info, ClearAll, Add, Edit, Check,
 } from '@mui/icons-material';
 import { useUIStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
-import { useNavigate } from 'react-router-dom';
+import { useDeviceStore } from '@/store/deviceStore';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 
@@ -26,9 +27,12 @@ interface Props { onMenuClick: () => void; }
 const TopBar: React.FC<Props> = ({ onMenuClick }) => {
   const theme    = useTheme();
   const navigate = useNavigate();
-  const { notifications, markAllRead, clearNotifications } = useUIStore();
+  const location = useLocation();
+  const { notifications, markAllRead, clearNotifications, editMode, setEditMode } = useUIStore();
   const { profile, user } = useAuthStore();
+  const { devices } = useDeviceStore();
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [plusAnchor, setPlusAnchor] = useState<HTMLElement | null>(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -41,46 +45,11 @@ const TopBar: React.FC<Props> = ({ onMenuClick }) => {
     <AppBar position="sticky" elevation={0} sx={{ zIndex: theme.zIndex.drawer - 1 }}>
       <Toolbar sx={{ gap: 1 }}>
 
-        {/* Mobile hamburger */}
-        <IconButton
-          onClick={onMenuClick}
-          sx={{ display: { md: 'none' }, mr: 1 }}
-          edge="start"
-          color="inherit"
-        >
-          <MenuIcon />
-        </IconButton>
+        {/* Removed mobile hamburger "3 lines" per request */}
 
         {/* Orbit logo — mobile only */}
-        <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', gap: 1, mr: 'auto' }}>
-          {/* Mini orbit icon */}
-          <Box sx={{ position: 'relative', width: 30, height: 30 }}>
-            {[30, 22].map((size, i) => (
-              <motion.div
-                key={size}
-                style={{
-                  position: 'absolute',
-                  width: size,
-                  height: size * 0.42,
-                  borderRadius: '50%',
-                  border: `1px solid ${i === 0 ? 'rgba(0,212,255,0.55)' : 'rgba(74,144,255,0.45)'}`,
-                  top: '50%', left: '50%',
-                  marginTop: -(size * 0.42) / 2,
-                  marginLeft: -size / 2,
-                }}
-                animate={{ rotateZ: 360 }}
-                transition={{ duration: 5 + i * 2, repeat: Infinity, ease: 'linear' }}
-              />
-            ))}
-            <Box sx={{
-              position: 'absolute', top: '50%', left: '50%',
-              transform: 'translate(-50%,-50%)',
-              width: 12, height: 12,
-            }}>
-              <img src="/icons/orbit_alone.png" alt="" style={{ width: 12, height: 12, objectFit: 'contain' }} />
-            </Box>
-          </Box>
-
+        <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', gap: 1.5, mr: 'auto' }}>
+          <img src="/icons/orbit_alone.png" alt="Orbit" style={{ width: 28, height: 28, objectFit: 'contain', display: 'block' }} />
           <Typography
             variant="h6"
             sx={{
@@ -88,6 +57,7 @@ const TopBar: React.FC<Props> = ({ onMenuClick }) => {
               background: 'linear-gradient(90deg, #00D4FF, #4A90FF)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
+              lineHeight: 1,
             }}
           >
             Orbit
@@ -95,6 +65,42 @@ const TopBar: React.FC<Props> = ({ onMenuClick }) => {
         </Box>
 
         <Box sx={{ flex: 1 }} />
+
+        {/* Edit/Reorder Toggle Icon (Dashboard only) */}
+        {location.pathname === '/dashboard' && devices.length > 0 && (
+          <IconButton
+            onClick={() => setEditMode(!editMode)}
+            color={editMode ? "success" : "inherit"}
+            size="large"
+            id="toggle-edit-mode-btn"
+          >
+            {editMode ? <Check /> : <Edit />}
+          </IconButton>
+        )}
+
+        {/* Dynamic Add (+) Option */}
+        {devices.length > 0 && (
+          <>
+            <IconButton onClick={(e) => setPlusAnchor(e.currentTarget)} color="inherit" size="large" id="add-shortcut-btn">
+              <Add />
+            </IconButton>
+            <Menu
+              anchorEl={plusAnchor}
+              open={Boolean(plusAnchor)}
+              onClose={() => setPlusAnchor(null)}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              slotProps={{ paper: { sx: { borderRadius: 3, minWidth: 150 } } }}
+            >
+              <MenuItem onClick={() => { setPlusAnchor(null); navigate('/pair'); }}>
+                Add Device
+              </MenuItem>
+              <MenuItem onClick={() => { setPlusAnchor(null); navigate('/rooms'); }}>
+                Add Room
+              </MenuItem>
+            </Menu>
+          </>
+        )}
 
         {/* Notification Bell */}
         <IconButton onClick={handleBellClick} size="large" color="inherit" id="notif-bell-btn">
