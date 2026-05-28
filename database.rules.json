@@ -1,0 +1,45 @@
+{
+  "rules": {
+    "deviceData": {
+      "$deviceId": {
+
+        // ── Top-level: authenticated app can read/write ──────────────────
+        ".read":  "auth != null",
+        ".write": "auth != null",
+
+        "info": {
+          ".read":  "auth != null",
+          ".write": "auth != null"
+        },
+
+        "channels": {
+          "$channelId": {
+            ".read":  "auth != null",
+            ".write": "auth != null"
+          }
+        },
+
+        // ── Heartbeat: ESP8266 writes WITHOUT auth token ──────────────────
+        "heartbeat": {
+          ".read":  "auth != null",
+          ".write": true
+        },
+
+        // ── Status: ESP8266 writes WITHOUT auth token ─────────────────────
+        "status": {
+          ".read":  "auth != null",
+          ".write": true
+        },
+
+        // ── PendingBits wake-flag ─────────────────────────────────────────
+        // App writes bits when toggling relays / scheduling.
+        // ESP8266 reads bits, processes channels, then clears them.
+        // ESP8266 also writes (clears) bits — so write = true here too.
+        "pendingBits": {
+          ".read":  "auth != null",
+          ".write": true
+        }
+      }
+    }
+  }
+}
