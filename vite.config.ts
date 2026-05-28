@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'icons/*.png', 'robots.txt'],
       manifest: {
-        name: 'AutoRob Home',
-        short_name: 'AutoRob',
+        name: 'Orbit Smart Home',
+        short_name: 'Orbit',
         description: 'Smart Home Automation Platform',
         theme_color: '#6366F1',
         background_color: '#0F172A',
@@ -19,8 +19,8 @@ export default defineConfig({
         orientation: 'portrait-primary',
         start_url: '/',
         icons: [
-          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+          { src: '/icons/ORBIT.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icons/ORBIT.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
         ],
       },
       workbox: {

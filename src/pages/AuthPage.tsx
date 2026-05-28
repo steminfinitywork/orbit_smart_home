@@ -116,7 +116,7 @@ const AuthPage: React.FC = () => {
               width: 38, height: 38,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <img src="/icons/orbit_stem.png" alt="Orbit" style={{ width: 38, height: 38, objectFit: 'contain' }} />
+              <img src="/icons/ORBIT.png" alt="Orbit" style={{ width: 38, height: 38, objectFit: 'contain' }} />
             </Box>
           </Box>
 
