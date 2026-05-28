@@ -77,7 +77,7 @@ const TopBar: React.FC<Props> = ({ onMenuClick }) => {
               transform: 'translate(-50%,-50%)',
               width: 12, height: 12,
             }}>
-              <img src="/icons/orbit-icon.png" alt="" style={{ width: 12, height: 12, objectFit: 'contain' }} />
+              <img src="/icons/ORBIT.png" alt="" style={{ width: 12, height: 12, objectFit: 'contain' }} />
             </Box>
           </Box>
 

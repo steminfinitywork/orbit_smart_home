@@ -69,7 +69,7 @@ const Sidebar: React.FC<Props> = ({ open, onClose }) => {
             width: 18, height: 18,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <img src="/icons/orbit-icon.png" alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+            <img src="/icons/ORBIT.png" alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
           </Box>
         </Box>
 
